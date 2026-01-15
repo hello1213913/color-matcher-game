@@ -1,23 +1,17 @@
-// Game elements
-const welcomePage = document.getElementById('welcomePage');
-const gameContainer = document.getElementById('gameContainer');
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const scoreDisplay = document.getElementById('scoreDisplay');
-const gameOverDisplay = document.getElementById('gameOver');
-const readyButton = document.getElementById('readyButton');
-const madeByPopup = document.getElementById('madeByPopup');
+// --- Global Variables ---
+let welcomePage, gameContainer, canvas, ctx, scoreDisplay, gameOverDisplay, readyButton, madeByPopup;
 
-// Game variables
+// Game State
 let score = 0;
 let gameRunning = false;
 let gameStarted = false;
 let animationFrameId = null;
+let frameCount = 0;
 
 // Player
 const player = {
-    x: canvas.width / 2,
-    y: canvas.height - 50,
+    x: 0,
+    y: 0,
     radius: 20,
     color: '#FF5252',
     speed: 5
@@ -28,33 +22,55 @@ let obstacles = [];
 let obstacleSpeed = 2;
 let obstacleFrequency = 100;
 
-// Colors
-const colors = ['#FF5252', '#FFEB3B', '#4CAF50', '#2196F3'];
-
-// Frame counter
-let frameCount = 0;
-
-// Keyboard controls
+// Inputs
 const keys = {
     ArrowLeft: false,
     ArrowRight: false
 };
+let touchStartX = 0;
 
-// Initialize game
+// Constants
+const colors = ['#FF5252', '#FFEB3B', '#4CAF50', '#2196F3'];
+
+// --- Initialization ---
 function init() {
+    // Select Elements
+    welcomePage = document.getElementById('welcomePage');
+    gameContainer = document.getElementById('gameContainer');
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    scoreDisplay = document.getElementById('scoreDisplay');
+    gameOverDisplay = document.getElementById('gameOver');
+    readyButton = document.getElementById('readyButton');
+    madeByPopup = document.getElementById('madeByPopup');
+
+    // Set initial player position
+    player.x = canvas.width / 2;
+    player.y = canvas.height - 50;
+
+    // Add Event Listeners
     readyButton.addEventListener('click', showGameScreen);
-    canvas.addEventListener('click', handleClick);
+    
+    // Keyboard controls
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     
-    // Mobile controls
+    // Touch/Click controls
+    canvas.addEventListener('click', handleClick);
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd);
     
+    // Restart on game over click
+    gameOverDisplay.addEventListener('click', () => {
+        if(!gameRunning) startGame();
+    });
+
     // Popup click handler
     madeByPopup.addEventListener('click', hideMadeByPopup);
 }
+
+// --- Game Logic ---
 
 function showGameScreen() {
     welcomePage.style.display = 'none';
@@ -62,12 +78,15 @@ function showGameScreen() {
     showMadeByPopup();
 }
 
+let popupTimeout;
 function showMadeByPopup() {
     madeByPopup.style.display = 'flex';
-    setTimeout(hideMadeByPopup, 2000);
+    // Auto hide after 2 seconds
+    popupTimeout = setTimeout(hideMadeByPopup, 2000);
 }
 
 function hideMadeByPopup() {
+    clearTimeout(popupTimeout);
     madeByPopup.style.display = 'none';
     if (!gameRunning) {
         startGame();
@@ -75,7 +94,6 @@ function hideMadeByPopup() {
 }
 
 function startGame() {
-    // Cancel any existing animation frame
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
     }
@@ -85,17 +103,23 @@ function startGame() {
     score = 0;
     obstacles = [];
     obstacleSpeed = 2;
+    obstacleFrequency = 100;
     frameCount = 0;
+    
     player.color = getRandomColor();
     player.x = canvas.width / 2;
+    
     scoreDisplay.textContent = `Score: ${score}`;
     gameOverDisplay.style.display = 'none';
+    
     animate();
 }
 
-function handleClick() {
+function handleClick(e) {
+    e.preventDefault();
+    
     if (!gameRunning && gameStarted) {
-        hideMadeByPopup();
+        hideMadeByPopup(); 
         startGame();
     } else if (gameRunning) {
         player.color = getRandomColor(player.color);
@@ -151,8 +175,24 @@ function update() {
         // Check collision
         if (obstacles[i].y + obstacles[i].height > player.y - player.radius &&
             obstacles[i].y < player.y + player.radius) {
+            
+            // Player is vertically inside the obstacle area
             if (player.x < obstacles[i].gapPosition ||
                 player.x > obstacles[i].gapPosition + obstacles[i].gap) {
+                
+                // Player hit the wall part (not the gap)
+                // Color matching logic could go here if walls had colors,
+                // but usually walls kill you unless you hit the specific colored gate.
+                // In this logic: Walls kill you.
+                // If you want "Color Match" through the wall, logic changes.
+                // CURRENT LOGIC: You must pass through the gap.
+                // If you hit the color part (the wall), you die.
+                
+                // Wait, looking at original request "Match the gate color to pass through".
+                // The drawing code draws the obstacle as a solid bar with a gap.
+                // It draws the obstacle color on the Left and Right rects.
+                // So if you hit the wall, you hit the color.
+                
                 if (player.color !== obstacles[i].color) {
                     gameOver();
                     return;
@@ -175,7 +215,6 @@ function update() {
 }
 
 function draw() {
-    // Clear canvas
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
@@ -201,12 +240,12 @@ function draw() {
 
 function gameOver() {
     gameRunning = false;
+    gameStarted = false;
     gameOverDisplay.style.display = 'block';
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
     }
-    setTimeout(showMadeByPopup, 1000);
 }
 
 function animate() {
@@ -217,36 +256,34 @@ function animate() {
     }
 }
 
-// Input handlers
+// --- Input Handlers ---
+
 function handleKeyDown(e) {
-    if (e.key in keys) {
-        keys[e.key] = true;
-    }
+    if (e.key in keys) keys[e.key] = true;
 }
 
 function handleKeyUp(e) {
-    if (e.key in keys) {
-        keys[e.key] = false;
-    }
+    if (e.key in keys) keys[e.key] = false;
 }
 
-let touchStartX = 0;
-
 function handleTouchStart(e) {
-    e.preventDefault();
+    if(e.target === canvas) e.preventDefault();
     touchStartX = e.touches[0].clientX;
-    handleClick();
+    handleClick(e);
 }
 
 function handleTouchMove(e) {
-    e.preventDefault();
+    if(e.target === canvas) e.preventDefault();
     const touchX = e.touches[0].clientX;
-    if (touchX < touchStartX - 10) {
+    
+    if (touchX < touchStartX - 5) {
         keys.ArrowLeft = true;
         keys.ArrowRight = false;
-    } else if (touchX > touchStartX + 10) {
+        touchStartX = touchX;
+    } else if (touchX > touchStartX + 5) {
         keys.ArrowRight = true;
         keys.ArrowLeft = false;
+        touchStartX = touchX;
     }
 }
 
@@ -255,5 +292,5 @@ function handleTouchEnd() {
     keys.ArrowRight = false;
 }
 
-// Start the game when DOM is loaded
+// Start Init when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
